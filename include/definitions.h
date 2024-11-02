@@ -24,7 +24,7 @@
 #define LOWER_INTAKE_MOTOR 14
 
 #define IMU_SENSOR_PORT 17
-#define SERIALPORT 16
+#define SERIALPORT 19
 
 #define SOLENOID_SENSOR_PORT 'H'
 
@@ -78,3 +78,7 @@ double global_distY = 0.0;
 double global_distX = 0.0;
 double global_errorY = 0.0;
 double global_errorX = 0.0;
+
+double kP = 0.5;  // Proportional gain
+double kI = 0.01; // Integral gain
+double kD = 0.3;  // Derivative gain

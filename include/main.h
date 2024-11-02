@@ -36,6 +36,9 @@
 
 #include "api.h"
 #include "definitions.h"
+#include "pros/adi.hpp"
+#include "pros/imu.hpp"
+#include "pros/motors.hpp"
 
 /**
  * You should add more #includes here

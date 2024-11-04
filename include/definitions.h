@@ -78,3 +78,10 @@ double global_distY = 0.0;
 double global_distX = 0.0;
 double global_errorY = 0.0;
 double global_errorX = 0.0;
+
+//pid
+double base_error = 5.0;
+double base_kp = 0.9;
+double base_kd = 0.01;
+double base_ki = 0.0;
+double decelerationThreshold = 50;

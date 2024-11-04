@@ -2,7 +2,121 @@
 
 void disabled() {}
 void competition_initialize() {}
-void autonomous() {}
+
+void base_PID(double targetDistance, double targetTurning = 0) {
+    double wheel_diameter = 69.85; // Diameter in mm
+    double PosConvert = M_PI * wheel_diameter / 360; // Conversion factor
+
+    // Movement variables
+    double powerL = 0;
+    double powerR = 0;
+    double encdleft = 0;
+    double encdright = 0;
+    double errorLeft = 0;
+    double errorRight = 0;
+    double prevErrorLeft = 0;
+    double prevErrorRight = 0;
+    double totalErrorLeft = 0;
+    double totalErrorRight = 0;
+
+    // Turning variables
+    double initialHeading = imu.get_heading(); // Store the initial heading
+    double currentHeading = initialHeading;
+    double turnError = 0;
+
+    // 1. Perform turning first
+    if (targetTurning != 0) {
+        imu.tare_heading();
+        while (true) {
+            currentHeading = imu.get_heading();
+            turnError = targetTurning - (currentHeading - initialHeading);
+
+            // Check if we are within the error threshold
+            if (fabs(turnError) <= base_error) {
+                // Stop turning if we are close enough
+                lf.move(0);
+                lm.move(0);
+                lb.move(0);
+                rf.move(0);
+                rm.move(0);
+                rb.move(0);
+                break; // Exit turning loop
+            }
+
+            // Calculate turn power
+            double turnPower = turnError * 0.5; // Tune this gain
+
+            // Adjust motor powers for turning
+            lf.move(-turnPower);  // Adjust left side for turning
+            lm.move(-turnPower);
+            lb.move(-turnPower);
+            rf.move(turnPower);    // Adjust right side for turning
+            rm.move(turnPower);
+            rb.move(turnPower);
+
+            pros::delay(2); // Delay to reduce CPU load
+        }
+    }
+
+    // 2. Now perform distance movement
+    bool l_move = true;
+    bool r_move = true;
+
+    lf.tare_position();
+    rf.tare_position();
+
+    while (l_move || r_move) {
+        // Get encoder values
+        encdleft = lf.get_position() * PosConvert;
+        encdright = rf.get_position() * PosConvert;
+
+        // Calculate distance error
+        errorLeft = targetDistance - encdleft;
+        errorRight = targetDistance - encdright;
+        totalErrorLeft += errorLeft;
+        totalErrorRight += errorRight;
+
+        // PID for left motors
+        if (fabs(errorLeft) <= base_error) {
+            powerL = 0;
+            l_move = false;
+        } else {
+            // Gradually reduce power as you approach the target
+            if (fabs(errorLeft) < decelerationThreshold) {
+                powerL *= 0.5; // Reduce power to half when close to target
+            } else {
+                powerL = base_kp * errorLeft + base_ki * totalErrorLeft + base_kd * (errorLeft - prevErrorLeft);
+            }
+        }
+
+        // PID for right motors
+        if (fabs(errorRight) <= base_error) {
+            powerR = 0;
+            r_move = false;
+        } else {
+            // Gradually reduce power as you approach the target
+            if (fabs(errorRight) < decelerationThreshold) {
+                powerR *= 0.5; // Reduce power to half when close to target
+            } else {
+                powerR = base_kp * errorRight + base_ki * totalErrorRight + base_kd * (errorRight - prevErrorRight);
+            }
+        }
+
+        // Move the motors
+        lf.move(powerL);
+        lm.move(powerL);
+        lb.move(powerL);
+        rf.move(powerR);
+        rm.move(powerR);
+        rb.move(powerR);
+
+        // Update previous errors for the next iteration
+        prevErrorLeft = errorLeft;
+        prevErrorRight = errorRight;
+
+        pros::delay(2); // Delay to reduce CPU load
+    }
+}
 
 void serialRead(void* params){
     vexGenericSerialEnable(SERIALPORT - 1, 0);
@@ -64,6 +178,16 @@ double bound_value(double value){
     return value;
 }
 
+void autonomous(){
+    intakeLower.move(110);
+	intakeUpper.move(110);
+    conveyor.move(110);
+    base_PID(0, 90); // Turning first with no distance target
+    base_PID(1000);   //move forward
+    base_PID(0, 90);
+    base_PID(1000);
+}
+
 void initialize() {
 	pros::lcd::initialize();
 	lf.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
@@ -123,6 +247,8 @@ void opcontrol(){
         }
 
         if(master.get_digital_new_press(DIGITAL_A)) actuated = !actuated;
+
+        if(master.get_digital_new_press(DIGITAL_B)) autonomous();
 
         if(actuated) solenoid.set_value(0);
         else solenoid.set_value(1);

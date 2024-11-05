@@ -31,18 +31,17 @@ void base_PID(double targetDistance, double targetTurning) {
     double totalErrorRight = 0;
 
     // Turning variables
-    double initialHeading = imu.get_heading(); // Store the initial heading
+    double initialHeading = imu.get_rotation(); // Store the initial heading
     double currentHeading = initialHeading;
     double turnError = 0.0;
 
     // 1. Perform turning first
     if (targetTurning != 0) {
-        imu.tare_heading();
-        double turn_Kp = 0.85;
+        imu.tare_rotation();
         double prevError = 0.0;
         while (true) {
-            currentHeading = imu.get_heading();
-            turnError = fabs(targetTurning - (currentHeading));
+            currentHeading = fabs(imu.get_rotation());
+            turnError = fabs(fabs(targetTurning) - (currentHeading));
             pros::lcd::print(0, "Error: %.lf", turnError);
 
             // Check if we are within the error threshold
@@ -61,8 +60,6 @@ void base_PID(double targetDistance, double targetTurning) {
 
             // Calculate turn power
             double turnPower = turnError * turn_Kp + turnDerivative * turn_Kd; // Tune this gain
-            if(fabs(turnError) <= 10)
-                turnPower*=0.5;
             prevError = turnError;
 
             // Adjust motor powers for turning
@@ -104,8 +101,8 @@ void base_PID(double targetDistance, double targetTurning) {
         encdright = rf.get_position() * PosConvert;
 
         // Calculate distance error
-        errorLeft = targetDistance - encdleft;
-        errorRight = targetDistance - encdright;
+        errorLeft = fabs(targetDistance) - fabs(encdleft);
+        errorRight = fabs(targetDistance) - fabs(encdright);
         totalErrorLeft += errorLeft;
         totalErrorRight += errorRight;
 
@@ -118,7 +115,7 @@ void base_PID(double targetDistance, double targetTurning) {
             if (fabs(errorLeft) < decelerationThreshold) {
                 powerL *= 0.5; // Reduce power to half when close to target
             } else {
-                powerL = base_kp * errorLeft + base_ki * totalErrorLeft + base_kd * (errorLeft - prevErrorLeft);
+                powerL = base_kp * errorLeft + base_ki * totalErrorLeft + base_kd * (prevErrorLeft - errorLeft);
             }
         }
 
@@ -131,17 +128,27 @@ void base_PID(double targetDistance, double targetTurning) {
             if (fabs(errorRight) < decelerationThreshold) {
                 powerR *= 0.5; // Reduce power to half when close to target
             } else {
-                powerR = base_kp * errorRight + base_ki * totalErrorRight + base_kd * (errorRight - prevErrorRight);
+                powerR = base_kp * errorRight + base_ki * totalErrorRight + base_kd * (prevErrorLeft - errorRight);
             }
         }
 
         // Move the motors
-        lf.move(powerL);
-        lm.move(powerL);
-        lb.move(powerL);
-        rf.move(powerR);
-        rm.move(powerR);
-        rb.move(powerR);
+        if(targetDistance > 0){
+            lf.move(powerL);
+            lm.move(powerL);
+            lb.move(powerL);
+            rf.move(powerR);
+            rm.move(powerR);
+            rb.move(powerR);
+        }
+        else if(targetDistance < 0){
+            lf.move(-powerL);
+            lm.move(-powerL);
+            lb.move(-powerL);
+            rf.move(-powerR);
+            rm.move(-powerR);
+            rb.move(-powerR);
+        }
 
         pros::lcd::print(0, "ErrorL: %.lf", errorLeft);
         pros::lcd::print(1, "ErrorR: %.lf", errorRight);
@@ -204,11 +211,48 @@ double bound_value(double value){
     return value;
 }
 
+void groupMove(int power, int velocity){
+    lf.tare_position();
+    lm.tare_position();
+    lb.tare_position();
+    rf.tare_position();
+    rm.tare_position();
+    rb.tare_position();
+    lf.move_absolute(power, velocity);
+    lm.move_absolute(power, velocity);
+    lb.move_absolute(power, velocity);
+    rf.move_absolute(power, velocity);
+    rm.move_absolute(power, velocity);
+    rb.move_absolute(power, velocity);
+}
+
 void autonomous(){
-    intakeLower.move(110);
-	intakeUpper.move(110);
-    conveyor.move(110);
-    base_PID(0, 89.5);
+    intakeLower.move(127);
+	intakeUpper.move(127);
+    //conveyor.move(110);
+    groupMove(100, 300);
+    pros::delay(400);
+    groupMove(0, 0);
+    turn_Kp = 4.5;
+    base_PID(0, -15);
+    pros::delay(800);
+    base_kp = 0.42;
+    lf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	lm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
+	rf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	rm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	rb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    base_PID(-585, 0);
+    groupMove(-550, 110);
+    pros::delay(500);
+    solenoid.set_value(1);
+    brake();
+    groupMove(0, 0);
+    pros::delay(2000);
+    //base_PID()
+    //base_PID(0, 89.5);
 }
 
 double target = 0;
@@ -288,16 +332,27 @@ void initialize() {
 
 void opcontrol(){
 	while (true){
-		leftY = bound_value(master.get_analog(ANALOG_LEFT_Y)*SCALING_FACTOR);
-		rightX = bound_value(master.get_analog(ANALOG_RIGHT_X)*SCALING_FACTOR);
-
-        lf.move(leftY - rightX);
-        lm.move(leftY - rightX);
-        lb.move(leftY - rightX);
-
-        rf.move(leftY + rightX);
-        rm.move(leftY + rightX);
-        rb.move(leftY + rightX);
+        if(master.get_digital_new_press(DIGITAL_Y)) tankDrive = !tankDrive;
+        if(tankDrive){
+            leftY = bound_value(master.get_analog(ANALOG_LEFT_Y)*SCALING_FACTOR);
+            rightY = bound_value(master.get_analog(ANALOG_RIGHT_Y)*SCALING_FACTOR);
+            lf.move(rightY);
+            lm.move(rightY);
+            lb.move(rightY);
+            rf.move(leftY);
+            rm.move(leftY);
+            rb.move(leftY);
+        }
+        else{
+            leftY = bound_value(master.get_analog(ANALOG_LEFT_Y)*SCALING_FACTOR);
+            rightX = bound_value(master.get_analog(ANALOG_RIGHT_X)*SCALING_FACTOR);
+            lf.move(leftY - rightX);
+            lm.move(leftY - rightX);
+            lb.move(leftY - rightX);
+            rf.move(leftY + rightX);
+            rm.move(leftY + rightX);
+            rb.move(leftY + rightX);
+        }
 
 		if(master.get_digital(DIGITAL_R1)){
 			intakeLower.move(110);
@@ -331,8 +386,8 @@ void opcontrol(){
         if(master.get_digital_new_press(DIGITAL_UP)) slammingState = 2;
         if(master.get_digital_new_press(DIGITAL_DOWN)) slammingState = 3;
 
-        if(actuated) solenoid.set_value(0);
-        else solenoid.set_value(1);
+        if(actuated) solenoid.set_value(1);
+        else solenoid.set_value(0);
 
 		pros::delay(5);
 	}

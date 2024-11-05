@@ -59,7 +59,10 @@ extern "C" void vexGenericSerialBaudrate(  uint32_t index, uint32_t rate );
 extern "C" int32_t vexGenericSerialTransmit( uint32_t index, uint8_t *buffer, int32_t length );
 
 //Controllers
-int leftX = 0, leftY = 0, rightX = 0;
+int leftX = 0; 
+int leftY = 0;
+int rightX = 0;
+int rightY = 0;
 
 //PARAMETERS
 const double MAX_RPM = 127.0;
@@ -69,6 +72,7 @@ const double TO_DEGREES = (180.0 / M_PI);
 const double TO_RADIANS = (M_PI / 180.0);
 const double WHEEL_BASE_RADIUS = 263.0/2.0; //in mm
 bool actuated = false;
+bool tankDrive = false;
 int slammingState = 0;
 
 //MogoLift
@@ -86,10 +90,11 @@ double global_errorY = 0.0;
 double global_errorX = 0.0;
 
 //pid
-double base_error = 2.0;
+double base_error = 4.0;
 double base_kp = 1.1;
-double base_kd = 0.1;
+double base_kd = 0.06;
 double base_ki = 0.0;
-double decelerationThreshold = 80;
+double decelerationThreshold = 130;
 
 double turn_Kd = 0.0;
+double turn_Kp = 2.1;

@@ -3,7 +3,18 @@
 void disabled() {}
 void competition_initialize() {}
 
-void base_PID(double targetDistance, double targetTurning = 0) {
+void brake(){
+    lf.brake();
+    lm.brake();
+    lb.brake();
+
+    rf.brake();
+    rm.brake();
+    rb.brake();
+    pros::delay(2);
+}
+
+void base_PID(double targetDistance, double targetTurning) {
     double wheel_diameter = 69.85; // Diameter in mm
     double PosConvert = M_PI * wheel_diameter / 360; // Conversion factor
 
@@ -22,18 +33,22 @@ void base_PID(double targetDistance, double targetTurning = 0) {
     // Turning variables
     double initialHeading = imu.get_heading(); // Store the initial heading
     double currentHeading = initialHeading;
-    double turnError = 0;
+    double turnError = 0.0;
 
     // 1. Perform turning first
     if (targetTurning != 0) {
         imu.tare_heading();
+        double turn_Kp = 0.85;
+        double prevError = 0.0;
         while (true) {
             currentHeading = imu.get_heading();
-            turnError = targetTurning - (currentHeading - initialHeading);
+            turnError = fabs(targetTurning - (currentHeading));
+            pros::lcd::print(0, "Error: %.lf", turnError);
 
             // Check if we are within the error threshold
-            if (fabs(turnError) <= base_error) {
+            if (fabs(turnError) <= 1.0) {
                 // Stop turning if we are close enough
+                brake();
                 lf.move(0);
                 lm.move(0);
                 lb.move(0);
@@ -42,25 +57,43 @@ void base_PID(double targetDistance, double targetTurning = 0) {
                 rb.move(0);
                 break; // Exit turning loop
             }
+            double turnDerivative = prevError - turnError;
 
             // Calculate turn power
-            double turnPower = turnError * 0.5; // Tune this gain
+            double turnPower = turnError * turn_Kp + turnDerivative * turn_Kd; // Tune this gain
+            if(fabs(turnError) <= 10)
+                turnPower*=0.5;
+            prevError = turnError;
 
             // Adjust motor powers for turning
-            lf.move(-turnPower);  // Adjust left side for turning
-            lm.move(-turnPower);
-            lb.move(-turnPower);
-            rf.move(turnPower);    // Adjust right side for turning
-            rm.move(turnPower);
-            rb.move(turnPower);
-
-            pros::delay(2); // Delay to reduce CPU load
+            if(targetTurning > 0){
+                lf.move(-turnPower);  // Adjust left side for turning
+                lm.move(-turnPower);
+                lb.move(-turnPower);
+                rf.move(turnPower);    // Adjust right side for turning
+                rm.move(turnPower);
+                rb.move(turnPower);
+            }
+            else if(targetTurning < 0){
+                lf.move(turnPower);  // Adjust left side for turning
+                lm.move(turnPower);
+                lb.move(turnPower);
+                rf.move(-turnPower);    // Adjust right side for turning
+                rm.move(-turnPower);
+                rb.move(-turnPower);
+            }
+            pros::delay(5); // Delay to reduce CPU load
         }
     }
 
+    bool l_move = false;
+    bool r_move = false;
+
     // 2. Now perform distance movement
-    bool l_move = true;
-    bool r_move = true;
+    if(targetDistance != 0){
+        l_move = true;
+        r_move = true;
+    }
 
     lf.tare_position();
     rf.tare_position();
@@ -110,12 +143,16 @@ void base_PID(double targetDistance, double targetTurning = 0) {
         rm.move(powerR);
         rb.move(powerR);
 
+        pros::lcd::print(0, "ErrorL: %.lf", errorLeft);
+        pros::lcd::print(1, "ErrorR: %.lf", errorRight);
+
         // Update previous errors for the next iteration
         prevErrorLeft = errorLeft;
         prevErrorRight = errorRight;
 
         pros::delay(2); // Delay to reduce CPU load
     }
+    brake();
 }
 
 void serialRead(void* params){
@@ -161,17 +198,6 @@ void serialRead(void* params){
     }
 }
 
-void brake(){
-    lf.brake();
-    lm.brake();
-    lb.brake();
-
-    rf.brake();
-    rm.brake();
-    rb.brake();
-    pros::delay(2);
-}
-
 double bound_value(double value){
     if (value > MAX_RPM) return MAX_RPM;
     if (value < -MAX_RPM) return -MAX_RPM;
@@ -182,10 +208,7 @@ void autonomous(){
     intakeLower.move(110);
 	intakeUpper.move(110);
     conveyor.move(110);
-    base_PID(0, 90); // Turning first with no distance target
-    base_PID(1000);   //move forward
-    base_PID(0, 90);
-    base_PID(1000);
+    base_PID(0, 89.5);
 }
 
 double target = 0;
@@ -252,7 +275,7 @@ void initialize() {
 	intakeUpper.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 	conveyor.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
 
-	imu.reset(true);
+	imu.reset(false);
     imu.set_data_rate(5);
 
     slam_dunk.calibrate();

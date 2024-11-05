@@ -17,16 +17,17 @@
 
 #define CONVEYOR_MOTOR 9
 
-#define LEFT_LIFT_MOTOR 18
-#define RIGHT_LIFT_MOTOR 10
-
 #define UPPER_INTAKE_MOTOR 15
 #define LOWER_INTAKE_MOTOR 14
 
 #define IMU_SENSOR_PORT 17
 #define SERIALPORT 16
 
+#define SLAM_DUNK_L 18
+#define SLAM_DUNK_R 1
+
 #define SOLENOID_SENSOR_PORT 'H'
+#define SLAM_DUNK_SENSOR_PORT 'G'
 
 #define ZERO_VECTOR INFINITY
 
@@ -44,9 +45,13 @@ pros::Motor intakeLower(UPPER_INTAKE_MOTOR, pros::E_MOTOR_GEARSET_06, false, pro
 pros::Motor intakeUpper(LOWER_INTAKE_MOTOR, pros::E_MOTOR_GEARSET_06, true, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor conveyor(CONVEYOR_MOTOR, pros::E_MOTOR_GEARSET_06, false, pros::E_MOTOR_ENCODER_DEGREES);
 
+pros::Motor slam_dunk_l(SLAM_DUNK_L, pros::E_MOTOR_GEAR_RED, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor slam_dunk_r(SLAM_DUNK_R, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
+
 pros::Imu imu(IMU_SENSOR_PORT);
 
 pros::ADIDigitalOut solenoid(SOLENOID_SENSOR_PORT);
+pros::ADIAnalogIn slam_dunk(SLAM_DUNK_SENSOR_PORT);
 
 extern "C" int32_t vexGenericSerialReceive( uint32_t index, uint8_t *buffer, int32_t length );
 extern "C" void vexGenericSerialEnable(  uint32_t index, uint32_t nu );
@@ -57,13 +62,14 @@ extern "C" int32_t vexGenericSerialTransmit( uint32_t index, uint8_t *buffer, in
 int leftX = 0, leftY = 0, rightX = 0;
 
 //PARAMETERS
-const double MAX_RPM = 600.0;
+const double MAX_RPM = 127.0;
 const double WHEEL_RADIUS = 34.925;
 const double SCALING_FACTOR = MAX_RPM / 127.0;
 const double TO_DEGREES = (180.0 / M_PI);
 const double TO_RADIANS = (M_PI / 180.0);
 const double WHEEL_BASE_RADIUS = 263.0/2.0; //in mm
 bool actuated = false;
+int slammingState = 0;
 
 //MogoLift
 const double mkP = 0.88;

@@ -188,6 +188,53 @@ void autonomous(){
     base_PID(1000);
 }
 
+double target = 0;
+double slam_Kp = 0.4;
+double slam_Kd = 0.1;
+double slam_Ki = 0.0;
+
+void slamDunk(){
+    double Derivative = 0.0;
+    double prevError = 0.0;
+    double Error = 0.0;
+    double Integral = 0.0;
+    while(true){
+        if(slammingState == 0){
+            target = 680;
+        }
+        else if(slammingState == 1){
+            target = 940;
+        }
+        else if(slammingState == 2){
+            target = 1900;
+        }
+        else if(slammingState == 3){
+            target = 2150;
+        }
+        Derivative = prevError - Error;
+        Error = fabs(target - slam_dunk.get_value());
+        Integral += Error;
+        double motorPower = slam_Kp * Error + slam_Kd * Derivative + slam_Ki * Integral;
+        if(target > slam_dunk.get_value()){
+            slam_dunk_l.move(motorPower);
+            slam_dunk_r.move(motorPower);
+        }
+        else if(target < slam_dunk.get_value()){
+            slam_dunk_l.move(-motorPower);
+            slam_dunk_r.move(-motorPower);
+        }
+
+        if(fabs(Error) <= 5){
+            slam_dunk_l.move(0);
+            slam_dunk_r.move(0);
+            slam_dunk_l.brake();
+            slam_dunk_r.brake();
+        }
+        prevError = Error;
+        pros::Task::delay(10);
+    }
+}
+
 void initialize() {
 	pros::lcd::initialize();
 	lf.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
@@ -198,6 +245,9 @@ void initialize() {
 	rm.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 	rb.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 
+    slam_dunk_l.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    slam_dunk_r.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
 	intakeLower.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 	intakeUpper.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 	conveyor.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
@@ -205,7 +255,10 @@ void initialize() {
 	imu.reset(true);
     imu.set_data_rate(5);
 
-	pros::Task serial_read(serialRead);
+    slam_dunk.calibrate();
+
+	//pros::Task serial_read(serialRead);
+    pros::Task slam_dunk(slamDunk);
 
 	master.clear();
 }
@@ -215,33 +268,33 @@ void opcontrol(){
 		leftY = bound_value(master.get_analog(ANALOG_LEFT_Y)*SCALING_FACTOR);
 		rightX = bound_value(master.get_analog(ANALOG_RIGHT_X)*SCALING_FACTOR);
 
-        lf.move_velocity(leftY - rightX);
-        lm.move_velocity(leftY - rightX);
-        lb.move_velocity(leftY - rightX);
+        lf.move(leftY - rightX);
+        lm.move(leftY - rightX);
+        lb.move(leftY - rightX);
 
-        rf.move_velocity(leftY + rightX);
-        rm.move_velocity(leftY + rightX);
-        rb.move_velocity(leftY + rightX);
+        rf.move(leftY + rightX);
+        rm.move(leftY + rightX);
+        rb.move(leftY + rightX);
 
 		if(master.get_digital(DIGITAL_R1)){
 			intakeLower.move(110);
 			intakeUpper.move(110);
 		}
-        else if(master.get_digital(DIGITAL_L1)){
-			intakeLower.move(-110);
+        else if(master.get_digital(DIGITAL_R2)){
+            intakeLower.move(-110);
 			intakeUpper.move(-110);
-		}
-		else{
-			intakeLower.move(0);
+        }
+        else{
+            intakeLower.move(0);
 			intakeUpper.move(0);
-		}
+        }
 
-        if(master.get_digital(DIGITAL_R2)){
+        if(master.get_digital(DIGITAL_L1)){
             conveyor.move(110);
-        }
-        else if(master.get_digital(DIGITAL_L2)){
+		}
+		else if(master.get_digital(DIGITAL_L2)){
             conveyor.move(-110);
-        }
+		}
         else{
             conveyor.move(0);
         }
@@ -249,6 +302,11 @@ void opcontrol(){
         if(master.get_digital_new_press(DIGITAL_A)) actuated = !actuated;
 
         if(master.get_digital_new_press(DIGITAL_B)) autonomous();
+
+        if(master.get_digital_new_press(DIGITAL_LEFT)) slammingState = 0;
+        if(master.get_digital_new_press(DIGITAL_RIGHT)) slammingState = 1;
+        if(master.get_digital_new_press(DIGITAL_UP)) slammingState = 2;
+        if(master.get_digital_new_press(DIGITAL_DOWN)) slammingState = 3;
 
         if(actuated) solenoid.set_value(0);
         else solenoid.set_value(1);

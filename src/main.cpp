@@ -15,9 +15,6 @@ void brake(){
 }
 
 void base_PID(double targetDistance, double targetTurning) {
-    double wheel_diameter = 69.85; // Diameter in mm
-    double PosConvert = M_PI * wheel_diameter / 360; // Conversion factor
-
     // Movement variables
     double powerL = 0;
     double powerR = 0;
@@ -56,6 +53,7 @@ void base_PID(double targetDistance, double targetTurning) {
                 rb.move(0);
                 break; // Exit turning loop
             }
+            if (fabs(turnError) > fabs(targetTurning)) break;
             double turnDerivative = prevError - turnError;
 
             // Calculate turn power
@@ -211,32 +209,41 @@ double bound_value(double value){
     return value;
 }
 
-void groupMove(int power, int velocity){
+double dead_band(int reading){
+    return abs(reading) > 2 ? reading : 0;
+}
+
+void groupMove(double distance, int velocity){
+    distance = distance / PosConvert;
     lf.tare_position();
     lm.tare_position();
     lb.tare_position();
     rf.tare_position();
     rm.tare_position();
     rb.tare_position();
-    lf.move_absolute(power, velocity);
-    lm.move_absolute(power, velocity);
-    lb.move_absolute(power, velocity);
-    rf.move_absolute(power, velocity);
-    rm.move_absolute(power, velocity);
-    rb.move_absolute(power, velocity);
+    while(fabs(lf.get_position()) < fabs(distance)){
+        lf.move_absolute(distance, velocity);
+        lm.move_absolute(distance, velocity);
+        lb.move_absolute(distance, velocity);
+        rf.move_absolute(distance, velocity);
+        rm.move_absolute(distance, velocity);
+        rb.move_absolute(distance, velocity);
+        pros::delay(1);
+        if(fabs(lf.get_position()) + fabs(rf.get_position())/2.0 >= fabs(distance)) break;
+    }
 }
 
 void autonomous(){
     intakeLower.move(127);
 	intakeUpper.move(127);
     //conveyor.move(110);
-    groupMove(100, 300);
-    pros::delay(400);
-    groupMove(0, 0);
+    groupMove(60.9, 110);
+    pros::delay(300);
+    //groupMove(0, 0);
     turn_Kp = 4.5;
     base_PID(0, -15);
-    pros::delay(800);
-    base_kp = 0.42;
+    pros::delay(300);
+    base_kp = 0.4;
     lf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
@@ -244,13 +251,29 @@ void autonomous(){
 	rf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-    base_PID(-585, 0);
-    groupMove(-550, 110);
-    pros::delay(500);
+    base_PID(-595, 0);
+    groupMove(-180, 90);
+    pros::delay(200);
     solenoid.set_value(1);
-    brake();
-    groupMove(0, 0);
-    pros::delay(2000);
+    //brake();
+    //groupMove(0, 0);
+    pros::delay(300);
+    conveyor.move(100);
+    base_PID(0, 45);
+    groupMove(200, 110);
+    pros::delay(200);
+    turn_Kp = 1.1;
+    base_PID(0, 147);
+    pros::delay(50);
+    groupMove(905, 140);
+    pros::delay(50);
+    turn_Kp = 1.15;
+    base_PID(0, 84);
+    groupMove(160, 150);
+    pros::delay(1000);
+    groupMove(160, 120);
+    pros::delay(1000);
+    //base_PID(200, 0);
     //base_PID()
     //base_PID(0, 89.5);
 }
@@ -282,20 +305,22 @@ void slamDunk(){
         Error = fabs(target - slam_dunk.get_value());
         Integral += Error;
         double motorPower = slam_Kp * Error + slam_Kd * Derivative + slam_Ki * Integral;
-        if(target > slam_dunk.get_value()){
-            slam_dunk_l.move(motorPower);
-            slam_dunk_r.move(motorPower);
-        }
-        else if(target < slam_dunk.get_value()){
-            slam_dunk_l.move(-motorPower);
-            slam_dunk_r.move(-motorPower);
-        }
 
         if(fabs(Error) <= 5){
             slam_dunk_l.move(0);
             slam_dunk_r.move(0);
             slam_dunk_l.brake();
             slam_dunk_r.brake();
+        }
+        else{
+            if(target > slam_dunk.get_value()){
+                slam_dunk_l.move(motorPower);
+                slam_dunk_r.move(motorPower);
+            }
+            else if(target < slam_dunk.get_value()){
+                slam_dunk_l.move(-motorPower);
+                slam_dunk_r.move(-motorPower);
+            }
         }
         prevError = Error;
         pros::Task::delay(10);
@@ -317,7 +342,7 @@ void initialize() {
 
 	intakeLower.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 	intakeUpper.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-	conveyor.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+	conveyor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
 	imu.reset(false);
     imu.set_data_rate(5);
@@ -334,8 +359,8 @@ void opcontrol(){
 	while (true){
         if(master.get_digital_new_press(DIGITAL_Y)) tankDrive = !tankDrive;
         if(tankDrive){
-            leftY = bound_value(master.get_analog(ANALOG_LEFT_Y)*SCALING_FACTOR);
-            rightY = bound_value(master.get_analog(ANALOG_RIGHT_Y)*SCALING_FACTOR);
+            leftY = dead_band(master.get_analog(ANALOG_LEFT_Y));
+            rightY = dead_band(master.get_analog(ANALOG_RIGHT_Y));
             lf.move(rightY);
             lm.move(rightY);
             lb.move(rightY);
@@ -344,8 +369,8 @@ void opcontrol(){
             rb.move(leftY);
         }
         else{
-            leftY = bound_value(master.get_analog(ANALOG_LEFT_Y)*SCALING_FACTOR);
-            rightX = bound_value(master.get_analog(ANALOG_RIGHT_X)*SCALING_FACTOR);
+            leftY = dead_band(master.get_analog(ANALOG_LEFT_Y));
+            rightX = dead_band(master.get_analog(ANALOG_RIGHT_X));
             lf.move(leftY - rightX);
             lm.move(leftY - rightX);
             lb.move(leftY - rightX);

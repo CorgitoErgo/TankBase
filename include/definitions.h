@@ -74,6 +74,8 @@ const double WHEEL_BASE_RADIUS = 263.0/2.0; //in mm
 bool actuated = false;
 bool tankDrive = false;
 int slammingState = 0;
+double wheel_diameter = 69.85; // Diameter in mm
+double PosConvert = M_PI * wheel_diameter / 360; // Conversion factor
 
 //MogoLift
 const double mkP = 0.88;
@@ -91,7 +93,7 @@ double global_errorX = 0.0;
 
 //pid
 double base_error = 4.0;
-double base_kp = 1.1;
+double base_kp = 1.08;
 double base_kd = 0.06;
 double base_ki = 0.0;
 double decelerationThreshold = 130;

@@ -309,9 +309,9 @@
       }
     },
     "upload_options": {
-      "icon": "pizza",
+      "icon": "planet",
       "after": "run",
-      "slot": 2
+      "slot": 1
     },
     "use_early_access": true
   }

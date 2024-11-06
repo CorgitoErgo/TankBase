@@ -31,6 +31,7 @@ void base_PID(double targetDistance, double targetTurning) {
     double initialHeading = imu.get_rotation(); // Store the initial heading
     double currentHeading = initialHeading;
     double turnError = 0.0;
+    double turnIntegral = 0.0;
 
     // 1. Perform turning first
     if (targetTurning != 0) {
@@ -42,7 +43,7 @@ void base_PID(double targetDistance, double targetTurning) {
             pros::lcd::print(0, "Error: %.lf", turnError);
 
             // Check if we are within the error threshold
-            if (fabs(turnError) <= 1.0) {
+            if (fabs(turnError) <= turn_margin) {
                 // Stop turning if we are close enough
                 brake();
                 lf.move(0);
@@ -57,8 +58,9 @@ void base_PID(double targetDistance, double targetTurning) {
             double turnDerivative = prevError - turnError;
 
             // Calculate turn power
-            double turnPower = turnError * turn_Kp + turnDerivative * turn_Kd; // Tune this gain
+            double turnPower = turnError * turn_Kp + turnDerivative * turn_Kd + turnIntegral * turn_Ki; // Tune this gain
             prevError = turnError;
+            turnIntegral += turnError;
 
             // Adjust motor powers for turning
             if(targetTurning > 0){
@@ -225,10 +227,10 @@ void groupMove(double distance, int velocity){
         lf.move_absolute(distance, velocity);
         lm.move_absolute(distance, velocity);
         lb.move_absolute(distance, velocity);
+
         rf.move_absolute(distance, velocity);
         rm.move_absolute(distance, velocity);
         rb.move_absolute(distance, velocity);
-        pros::delay(1);
         if(fabs(lf.get_position()) + fabs(rf.get_position())/2.0 >= fabs(distance)) break;
     }
 }
@@ -237,13 +239,13 @@ void autonomous(){
     intakeLower.move(127);
 	intakeUpper.move(127);
     //conveyor.move(110);
-    groupMove(60.9, 110);
-    pros::delay(300);
+    groupMove(61, 110);
+    pros::delay(200);
     //groupMove(0, 0);
     turn_Kp = 4.5;
     base_PID(0, -15);
-    pros::delay(300);
-    base_kp = 0.4;
+    pros::delay(80);
+    base_kp = 0.405;
     lf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
@@ -251,31 +253,61 @@ void autonomous(){
 	rf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    base_error = 5.0;
     base_PID(-595, 0);
     groupMove(-180, 90);
-    pros::delay(200);
+    pros::delay(100);
     solenoid.set_value(1);
     //brake();
     //groupMove(0, 0);
-    pros::delay(300);
+    pros::delay(110);
     conveyor.move(100);
-    base_PID(0, 45);
-    groupMove(200, 110);
-    pros::delay(200);
-    turn_Kp = 1.1;
-    base_PID(0, 147);
+    base_PID(0, 44);
+    groupMove(395, 120);
     pros::delay(50);
-    groupMove(905, 140);
+    turn_Kp = 1.2;
+    turn_margin = 2.0;
+    base_PID(0, 82);
+    turn_margin = 1.0;
     pros::delay(50);
-    turn_Kp = 1.15;
-    base_PID(0, 84);
-    groupMove(160, 150);
-    pros::delay(1000);
-    groupMove(160, 120);
-    pros::delay(1000);
-    //base_PID(200, 0);
-    //base_PID()
-    //base_PID(0, 89.5);
+    groupMove(540, 140);
+    pros::delay(50);
+    turn_Kp = 2.5;
+    turn_margin = 2.0;
+    base_PID(0, 63);
+    pros::delay(20);
+    groupMove(925, 140);
+    pros::delay(20);
+    base_PID(0, 48);
+    pros::delay(20);
+    groupMove(180, 140);
+    // pros::delay(200);
+    // groupMove(-100, 150);
+    // pros::delay(600);
+    // groupMove(300, 150);
+    // pros::delay(50);
+    // groupMove(-200, 140);
+    // pros::delay(200);
+    // turn_Kp = 2.2;
+    // turn_margin = 2.0;
+    // base_PID(0, -102);
+    // pros::delay(500);
+    // groupMove(-2000, 140);
+    // pros::delay(2000);
+
+
+    // groupMove(-160, 140);
+    // pros::delay(800);
+    // groupMove(350, 140);
+    // pros::delay(1000);
+    // groupMove(-200, 140);
+    // pros::delay(1000);
+    // turn_Kp = 2.2;
+    // turn_margin = 3.0;
+    // base_PID(0, -103);
+    // pros::delay(500);
+    // groupMove(-2000, 140);
+    // pros::delay(2000);
 }
 
 double target = 0;

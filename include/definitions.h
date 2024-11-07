@@ -94,13 +94,13 @@ double global_errorX = 0.0;
 
 //pid
 double base_error = 4.0;
-double base_kp = 1.081;
-double base_kd = 0.06;
+double base_kp = 1.58;
+double base_kd = 0.07;
 double base_ki = 0.003;
-double decelerationThreshold = 130;
+double decelerationThreshold = 160;
 
-double turn_margin = 1.5;
-double turn_Kd = 0.05;
+double turn_margin = 1.2;
+double turn_Kd = 0.08;
 double turn_Kp = 2.1;
 double turn_Ki = 0.009;
 

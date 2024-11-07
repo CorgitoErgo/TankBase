@@ -75,7 +75,8 @@ bool actuated = false;
 bool tankDrive = false;
 int slammingState = 0;
 double wheel_diameter = 69.85; // Diameter in mm
-double PosConvert = M_PI * wheel_diameter / 360; // Conversion factor
+double PosConvert = 3.1415 * wheel_diameter / 360.0; // Conversion factor
+double degrees_per_mm = 1.6857;
 
 //MogoLift
 const double mkP = 0.88;
@@ -95,10 +96,15 @@ double global_errorX = 0.0;
 double base_error = 4.0;
 double base_kp = 1.081;
 double base_kd = 0.06;
-double base_ki = 0.0;
+double base_ki = 0.003;
 double decelerationThreshold = 130;
 
 double turn_margin = 1.5;
-double turn_Kd = 0.0;
+double turn_Kd = 0.05;
 double turn_Kp = 2.1;
-double turn_Ki = 0.01;
+double turn_Ki = 0.009;
+
+double slam_target = 0;
+double slam_Kp = 0.4;
+double slam_Kd = 0.1;
+double slam_Ki = 0.0;

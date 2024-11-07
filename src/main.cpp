@@ -35,7 +35,7 @@ void base_PID(double targetDistance, double targetTurning) {
 
     // 1. Perform turning first
     if (targetTurning != 0) {
-        imu.tare_rotation();
+        while(!imu.tare_rotation());
         double prevError = 0.0;
         while (true) {
             currentHeading = fabs(imu.get_rotation());
@@ -44,42 +44,35 @@ void base_PID(double targetDistance, double targetTurning) {
 
             // Check if we are within the error threshold
             if (fabs(turnError) <= turn_margin) {
-                // Stop turning if we are close enough
-                brake();
-                lf.move(0);
-                lm.move(0);
-                lb.move(0);
-                rf.move(0);
-                rm.move(0);
-                rb.move(0);
                 break; // Exit turning loop
             }
-            if (fabs(turnError) > fabs(targetTurning)) break;
-            double turnDerivative = prevError - turnError;
+            double turnDerivative = turnError - prevError;
 
             // Calculate turn power
             double turnPower = turnError * turn_Kp + turnDerivative * turn_Kd + turnIntegral * turn_Ki; // Tune this gain
+            turnPower = std::clamp(turnPower, 80, 300);
             prevError = turnError;
             turnIntegral += turnError;
 
             // Adjust motor powers for turning
             if(targetTurning > 0){
-                lf.move(-turnPower);  // Adjust left side for turning
-                lm.move(-turnPower);
-                lb.move(-turnPower);
-                rf.move(turnPower);    // Adjust right side for turning
-                rm.move(turnPower);
-                rb.move(turnPower);
+                lf.move_velocity(-turnPower);  // Adjust left side for turning
+                lm.move_velocity(-turnPower);
+                lb.move_velocity(-turnPower);
+                rf.move_velocity(turnPower);    // Adjust right side for turning
+                rm.move_velocity(turnPower);
+                rb.move_velocity(turnPower);
             }
             else if(targetTurning < 0){
-                lf.move(turnPower);  // Adjust left side for turning
-                lm.move(turnPower);
-                lb.move(turnPower);
-                rf.move(-turnPower);    // Adjust right side for turning
-                rm.move(-turnPower);
-                rb.move(-turnPower);
+                lf.move_velocity(turnPower);  // Adjust left side for turning
+                lm.move_velocity(turnPower);
+                lb.move_velocity(turnPower);
+                rf.move_velocity(-turnPower);    // Adjust right side for turning
+                rm.move_velocity(-turnPower);
+                rb.move_velocity(-turnPower);
             }
-            pros::delay(5); // Delay to reduce CPU load
+            if (fabs(turnError) > fabs(targetTurning)) break;
+            pros::delay(2); // Delay to reduce CPU load
         }
     }
 
@@ -94,11 +87,12 @@ void base_PID(double targetDistance, double targetTurning) {
 
     lf.tare_position();
     rf.tare_position();
-
+    double encoder_degrees = targetDistance * degrees_per_mm;
+    int encoder_ticks = static_cast<int>(round(encoder_degrees));
     while (l_move || r_move) {
         // Get encoder values
-        encdleft = lf.get_position() * PosConvert;
-        encdright = rf.get_position() * PosConvert;
+        encdleft = lf.get_position() / degrees_per_mm;
+        encdright = rf.get_position() / degrees_per_mm;
 
         // Calculate distance error
         errorLeft = fabs(targetDistance) - fabs(encdleft);
@@ -115,8 +109,9 @@ void base_PID(double targetDistance, double targetTurning) {
             if (fabs(errorLeft) < decelerationThreshold) {
                 powerL *= 0.5; // Reduce power to half when close to target
             } else {
-                powerL = base_kp * errorLeft + base_ki * totalErrorLeft + base_kd * (prevErrorLeft - errorLeft);
+                powerL = base_kp * errorLeft + base_ki * totalErrorLeft + base_kd * (errorLeft - prevErrorLeft);
             }
+            powerL = std::clamp(powerL, 70, 290);
         }
 
         // PID for right motors
@@ -128,26 +123,27 @@ void base_PID(double targetDistance, double targetTurning) {
             if (fabs(errorRight) < decelerationThreshold) {
                 powerR *= 0.5; // Reduce power to half when close to target
             } else {
-                powerR = base_kp * errorRight + base_ki * totalErrorRight + base_kd * (prevErrorLeft - errorRight);
+                powerR = base_kp * errorRight + base_ki * totalErrorRight + base_kd * (errorRight - prevErrorRight);
             }
+            powerR = std::clamp(powerR, 70, 290);
         }
 
         // Move the motors
-        if(targetDistance > 0){
-            lf.move(powerL);
-            lm.move(powerL);
-            lb.move(powerL);
-            rf.move(powerR);
-            rm.move(powerR);
-            rb.move(powerR);
+        if(targetDistance > 0.0){
+            lm.move_velocity(powerL);
+            lf.move_velocity(powerL);
+            lb.move_velocity(powerL);
+            rf.move_velocity(powerR);
+            rm.move_velocity(powerR);
+            rb.move_velocity(powerR);
         }
-        else if(targetDistance < 0){
-            lf.move(-powerL);
-            lm.move(-powerL);
-            lb.move(-powerL);
-            rf.move(-powerR);
-            rm.move(-powerR);
-            rb.move(-powerR);
+        else if(targetDistance < 0.0){
+            lf.move_velocity(-powerL);
+            lm.move_velocity(-powerL);
+            lb.move_velocity(-powerL);
+            rf.move_velocity(-powerR);
+            rm.move_velocity(-powerR);
+            rb.move_velocity(-powerR);
         }
 
         pros::lcd::print(0, "ErrorL: %.lf", errorLeft);
@@ -215,72 +211,114 @@ double dead_band(int reading){
     return abs(reading) > 2 ? reading : 0;
 }
 
-void groupMove(double distance, int velocity){
-    distance = distance / PosConvert;
+void groupMove(double distance_mm, int velocity){
+    double encoder_degrees = distance_mm * degrees_per_mm;
+    int encoder_ticks = static_cast<int>(round(encoder_degrees));
     lf.tare_position();
     lm.tare_position();
     lb.tare_position();
     rf.tare_position();
     rm.tare_position();
     rb.tare_position();
-    while(fabs(lf.get_position()) < fabs(distance)){
-        lf.move_absolute(distance, velocity);
-        lm.move_absolute(distance, velocity);
-        lb.move_absolute(distance, velocity);
+    while((fabs(rf.get_position()) + fabs(lf.get_position()))/2.0 < fabs(encoder_ticks)){
+        lf.move_velocity(100);
+        lm.move_velocity(100);
+        lb.move_velocity(100);
+        rf.move_velocity(100);
+        rm.move_velocity(100);
+        rb.move_velocity(100);
 
-        rf.move_absolute(distance, velocity);
-        rm.move_absolute(distance, velocity);
-        rb.move_absolute(distance, velocity);
-        if(fabs(lf.get_position()) + fabs(rf.get_position())/2.0 >= fabs(distance)) break;
+        // lm.move_absolute(encoder_ticks, velocity);
+        // lb.move_absolute(encoder_ticks, velocity);
+        // lf.move_absolute(encoder_ticks, velocity);
+
+        // rf.move_absolute(encoder_ticks, velocity);
+        // rm.move_absolute(encoder_ticks, velocity);
+        // rb.move_absolute(encoder_ticks, velocity);
+        if((fabs(rf.get_position()) + fabs(lf.get_position()))/2.0 >= fabs(encoder_ticks)) break;
     }
+    brake();
 }
 
 void autonomous(){
     intakeLower.move(127);
 	intakeUpper.move(127);
-    //conveyor.move(110);
-    groupMove(61, 110);
-    pros::delay(200);
-    //groupMove(0, 0);
-    turn_Kp = 4.5;
-    base_PID(0, -15);
-    pros::delay(80);
-    base_kp = 0.405;
+    groupMove(100, 70);
+    pros::delay(100);
+    pros::delay(300);
+    turn_Kp = 0.5;
+    base_PID(0, -12);
+    pros::delay(100);
     lf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-
 	rf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     base_error = 5.0;
-    base_PID(-595, 0);
-    groupMove(-180, 90);
+    base_kp = 0.18;
+    base_ki = 0.001;
+    base_kd = 0.01;
+    base_PID(-640, 0);
+    groupMove(-185, 60);
     pros::delay(100);
     solenoid.set_value(1);
-    //brake();
-    //groupMove(0, 0);
-    pros::delay(110);
+    pros::delay(120);
     conveyor.move(100);
-    base_PID(0, 44);
-    groupMove(395, 120);
-    pros::delay(50);
+
+    turn_Kp = 0.45;
+    base_PID(0, 45);
+    pros::delay(100);
+    groupMove(450, 120);
+    pros::delay(100);
     turn_Kp = 1.2;
     turn_margin = 2.0;
-    base_PID(0, 82);
+    base_PID(0, 81);
     turn_margin = 1.0;
-    pros::delay(50);
-    groupMove(540, 140);
-    pros::delay(50);
-    turn_Kp = 2.5;
-    turn_margin = 2.0;
-    base_PID(0, 63);
-    pros::delay(20);
-    groupMove(925, 140);
-    pros::delay(20);
-    base_PID(0, 48);
-    pros::delay(20);
-    groupMove(180, 140);
+    pros::delay(100);
+    groupMove(530, 140);
+    pros::delay(100);
+    turn_Kp = 0.5;
+    turn_margin = 1.5;
+    base_PID(0, 59);
+    pros::delay(100);
+    groupMove(800, 140);
+    pros::delay(100);
+    turn_Kp = 0.4;
+    turn_margin = 1.5;
+    base_PID(0, 45);
+    pros::delay(100);
+    groupMove(180, 90);
+    pros::delay(200);
+    groupMove(-180, 130);
+    pros::delay(400);
+    groupMove(345, 150);
+    pros::delay(200);
+    groupMove(-200, 140);
+    turn_Kp = 0.55;
+    turn_margin = 1.0;
+    base_PID(0, -105);
+    pros::delay(500);
+    groupMove(-1800, 140);
+    pros::delay(800);
+    solenoid.set_value(0);
+    groupMove(1000, 120);
+    pros::delay(500);
+    turn_Kp = 0.7;
+    turn_Kd = 0.001;
+    turn_Ki = 0.0;
+    base_PID(0, 181);
+    pros::delay(800);
+    groupMove(-1200, 140);
+    pros::delay(200);
+    solenoid.set_value(1);
+    pros::delay(500);
+    turn_Kp = 0.51;
+    turn_Kd = 0.001;
+    turn_Ki = 0.0001;
+    base_PID(0, -85);
+    pros::delay(100);
+
     // pros::delay(200);
     // groupMove(-100, 150);
     // pros::delay(600);
@@ -310,11 +348,6 @@ void autonomous(){
     // pros::delay(2000);
 }
 
-double target = 0;
-double slam_Kp = 0.4;
-double slam_Kd = 0.1;
-double slam_Ki = 0.0;
-
 void slamDunk(){
     double Derivative = 0.0;
     double prevError = 0.0;
@@ -322,40 +355,40 @@ void slamDunk(){
     double Integral = 0.0;
     while(true){
         if(slammingState == 0){
-            target = 680;
+            slam_target = 660;
         }
         else if(slammingState == 1){
-            target = 940;
+            slam_target = 870;
         }
         else if(slammingState == 2){
-            target = 1900;
+            slam_target = 1900;
         }
         else if(slammingState == 3){
-            target = 2150;
+            slam_target = 2150;
         }
         Derivative = prevError - Error;
-        Error = fabs(target - slam_dunk.get_value());
+        Error = fabs(slam_target - slam_dunk.get_value());
         Integral += Error;
         double motorPower = slam_Kp * Error + slam_Kd * Derivative + slam_Ki * Integral;
 
-        if(fabs(Error) <= 5){
+        if(fabs(Error) <= 10){
             slam_dunk_l.move(0);
             slam_dunk_r.move(0);
             slam_dunk_l.brake();
             slam_dunk_r.brake();
         }
         else{
-            if(target > slam_dunk.get_value()){
+            if(slam_target > slam_dunk.get_value() + 10){
                 slam_dunk_l.move(motorPower);
                 slam_dunk_r.move(motorPower);
             }
-            else if(target < slam_dunk.get_value()){
+            else if(slam_target < slam_dunk.get_value() - 10){
                 slam_dunk_l.move(-motorPower);
                 slam_dunk_r.move(-motorPower);
             }
         }
         prevError = Error;
-        pros::Task::delay(10);
+        pros::Task::delay(15);
     }
 }
 

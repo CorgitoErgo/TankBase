@@ -102,7 +102,7 @@ double decelerationThreshold = 160;
 double turn_margin = 1.2;
 double turn_Kd = 0.08;
 double turn_Kp = 2.1;
-double turn_Ki = 0.009;
+double turn_Ki = 0.01;
 
 double slam_target = 0;
 double slam_Kp = 0.4;

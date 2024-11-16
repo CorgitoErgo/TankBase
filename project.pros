@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "TankBase",
+    "project_name": "Upin",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -309,9 +309,10 @@
       }
     },
     "upload_options": {
-      "icon": "planet",
+      "icon": "pizza",
       "after": "run",
-      "slot": 1
+      "slot": 1,
+      "description": "Upin"
     },
     "use_early_access": true
   }

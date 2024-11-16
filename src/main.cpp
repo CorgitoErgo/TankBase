@@ -50,7 +50,7 @@ void base_PID(double targetDistance, double targetTurning) {
 
             // Calculate turn power
             double turnPower = turnError * turn_Kp + turnDerivative * turn_Kd + turnIntegral * turn_Ki; // Tune this gain
-            turnPower = std::clamp(turnPower, 80.0, 220.0);
+            turnPower = std::clamp(turnPower, 80.0, 210.0);
             prevError = turnError;
             turnIntegral += turnError;
 
@@ -78,6 +78,7 @@ void base_PID(double targetDistance, double targetTurning) {
 
     bool l_move = false;
     bool r_move = false;
+    int timeout = 0;
 
     // 2. Now perform distance movement
     if(targetDistance != 0){
@@ -111,7 +112,7 @@ void base_PID(double targetDistance, double targetTurning) {
             } else {
                 powerL = base_kp * errorLeft + base_ki * totalErrorLeft + base_kd * (errorLeft - prevErrorLeft);
             }
-            powerL = std::clamp(powerL, 70.0, 210.0);
+            powerL = std::clamp(powerL, 80.0, 175.0);
         }
 
         // PID for right motors
@@ -125,7 +126,7 @@ void base_PID(double targetDistance, double targetTurning) {
             } else {
                 powerR = base_kp * errorRight + base_ki * totalErrorRight + base_kd * (errorRight - prevErrorRight);
             }
-            powerR = std::clamp(powerR, 70.0, 220.0);
+            powerR = std::clamp(powerR, 80.0, 175.0);
         }
 
         if(errorRight < 0 && errorLeft < 0) break;
@@ -148,6 +149,8 @@ void base_PID(double targetDistance, double targetTurning) {
             rb.move_velocity(-powerR);
         }
 
+        if(timeout >= 2600) break;
+
         pros::lcd::print(0, "ErrorL: %.lf", errorLeft);
         pros::lcd::print(1, "ErrorR: %.lf", errorRight);
 
@@ -156,6 +159,7 @@ void base_PID(double targetDistance, double targetTurning) {
         prevErrorRight = errorRight;
 
         pros::delay(2); // Delay to reduce CPU load
+        timeout += 2;
     }
     brake();
 }
@@ -245,30 +249,25 @@ void moveTime(int delay_ms, int velocity){
     pros::delay(delay_ms);
 }
 
-void printController(){
-    while(true){
-        master.print(0,0,"Head:%.lf",imu.get_heading());
-        pros::delay(25);
-    }
-}
-
 void autonomous(){
     intakeLower.move(127);
 	intakeUpper.move(127);
-    groupMove(100, 70);
-    pros::delay(100);
+    //groupMove(105, 70);
+    base_PID(16, 0);
+    //moveTime(800, 100);
+    //pros::delay(100);
     pros::delay(300);
     turn_Kp = 0.5;
     turn_Kd = 0.0;
     turn_Ki = 0.001;
-    turn_margin = 0.9;
-    base_PID(0, -8.0);
+    turn_margin = 0.4;
+    //base_PID(0, -1.0);
     turn_Ki = 0.0;
-    pros::delay(100);
-    lf.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+    //pros::delay(100);
+    lf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-	rf.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+	rf.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	rb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     // base_error = 4.0;
@@ -277,7 +276,7 @@ void autonomous(){
     // base_kd = 0.01;
     // base_PID(-630, 0);
 
-    base_PID(-830, 0);
+    base_PID(-840, 0);
     //groupMove(-630, 120);
     //groupMove(-200, 60);
     pros::delay(100);
@@ -286,29 +285,32 @@ void autonomous(){
     conveyor.move(100);
 
     turn_Kp = 0.45;
-    base_PID(0, 48);
-    pros::delay(100);
-    base_PID(415, 0);
+    base_PID(0, 6);
+    //pros::delay(100);
+    base_kp = 1.7;
+    base_PID(418, 0);
+    base_kp = 1.58;
     //groupMove(415, 120);
     pros::delay(100);
-    turn_Kp = 1.2;
-    turn_margin = 1.5;
-    base_PID(0, 94);
+    turn_Kp = 1.1;
+    turn_margin = 1.0;
+    base_PID(0, 121);
     turn_margin = 1.0;
     pros::delay(100);
-    base_PID(520, 0);
+    base_PID(540, 0);
     //groupMove(520, 140);
     pros::delay(100);
     turn_Kp = 0.61;
-    turn_margin = 0.9;
+    turn_margin = 0.7;
     base_PID(0, 76);
     pros::delay(100);
-    base_PID(816, 0);
+    base_PID(818, 0);
     //groupMove(815, 140);
     pros::delay(100);
     turn_Kp = 0.4;
-    turn_margin = 1.0;
-    base_PID(0, 43);
+    turn_Ki = 0.005;
+    turn_margin = 0.5;
+    base_PID(0, 32);
     pros::delay(100);
     base_PID(180, 0);
     //groupMove(180, 70);
@@ -322,11 +324,11 @@ void autonomous(){
     while(!imu.tare_heading());
     base_PID(-180, 0);
     //groupMove(-190, 140);
-    turn_Kp = 0.7;
+    turn_Kp = 0.71;
     turn_Ki = 0.001;
     turn_Kd = 0.0;
-    turn_margin = 1.0;
-    base_PID(0, -105);
+    turn_margin = 0.6;
+    base_PID(0, -104);
     pros::delay(500);
     moveTime(2750, -180);
     pros::delay(800);
@@ -334,17 +336,19 @@ void autonomous(){
     conveyor.move(-60);
     pros::delay(280);
     conveyor.move(0);
-    base_PID(200, 0);
+    //base_PID(200, 0);
     //groupMove(200, 90);
     pros::delay(500);
     turn_Kp = 0.46;
     turn_Kd = 0.0;
     turn_Ki = 0.001;
     turn_margin = 1.0;
-    if(imu.get_heading() > 270.0)
-        base_PID(0, -(imu.get_heading() - 270.0));
-    else if(imu.get_heading() < 270.0)
-        base_PID(0, 270.0 - imu.get_heading());
+    base_PID(100, 0);
+    pros::delay(800);
+    if(imu.get_heading() > 285.0)
+        base_PID(0, -(imu.get_heading() - 285.0));
+    else if(imu.get_heading() < 285.0)
+        base_PID(0, 285.0 - imu.get_heading());
     base_PID(1100, 0);
     pros::delay(800);
 
@@ -454,12 +458,12 @@ void slamDunk(){
 void initialize() {
 	pros::lcd::initialize();
 	lf.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-	lm.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-	lb.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+	lm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
 	rf.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-	rm.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-	rb.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+	rm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	rb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
     slam_dunk_l.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     slam_dunk_r.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
@@ -475,9 +479,8 @@ void initialize() {
 
 	//pros::Task serial_read(serialRead);
     pros::Task slam_dunk(slamDunk);
-    pros::Task print_controller(printController);
 
-	master.clear();
+	//master.clear();
 }
 
 void opcontrol(){
@@ -535,7 +538,7 @@ void opcontrol(){
         if(master.get_digital_new_press(DIGITAL_RIGHT)) slammingState = 1;
         if(master.get_digital_new_press(DIGITAL_UP)) slammingState = 2;
         if(master.get_digital_new_press(DIGITAL_DOWN)) slammingState = 3;
-
+        if(master.get_digital_new_press(DIGITAL_Y)) imu.reset(true);
         if(actuated) solenoid.set_value(1);
         else solenoid.set_value(0);
 
